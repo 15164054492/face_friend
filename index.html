@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <title>発表会</title>
+        <!-- LeafletのCSS読み込み -->
+        <link
+            rel="stylesheet"
+            href="https://unpkg.com/leaflet@1.9.3/dist/leaflet.css"
+            crossorigin=""
+         />
+         <!-- Leafletのjavascript読み込み -->
+          <script
+            src="https://unpkg.com/leaflet@1.9.3/dist/leaflet.js"
+            crossorigin=""
+          ></script>
+         <style>
+             html, body {
+                height: 100%;
+                margin: 0;
+                padding: 0;
+             }
+             #map {
+                height: 100%;
+             }
+             /* 凡例の表示スタイル */
+             .info.legend {
+                background: white;
+                padding: 10px;
+                font-size: 12px;
+                line-height: 18px;
+                color: #333;
+                box-shadow: 0 0 15px rgba(0, 0, 0, 0.2);
+                border-radius: 5px;
+                border: 1px solid #ccc;
+             }
+             .info.legend i {
+                display: inline-block;
+                border: 1px solid black;
+                border-radius: 50%;
+                width: 12px;
+                height: 12px;
+                margin-right: 8px;
+             }
+        </style>
+    </head>
+    <body>
+         <div id="map"></div>
+         <script>
+             const map = L.map('map',{
+                center: [34.39302642506987, 135.34007690909195],
+                zoom: 15
+             });
+
+             //背景地図データ
+             const baseLayers={
+             OpenStreetMap:L.tileLayer(
+             'http://tile.openstreetmap.org/{z}/{x}/{y}.png',
+              {
+                    maxZoom:19
+              }
+             ),
+             空中写真: L.tileLayer(
+                'https://cyberjapandata.gsi.go.jp/xyz/seamlessphoto/{z}/{x}/{y}.jpg',
+                {
+                           maxZoom:18
+                }
+              ),
+             };
+             map.addLayer(baseLayers['OpenStreetMap']);
+
+             // 凡例を作成
+             const legend = L.control({position: 'topleft'});
+            
+             // 凡例用の配色とラベルの定義
+             const grades = [
+                {value: 10000000, color: '#ca0000', label: '1000万円以上'},
+                {value: 1000000, color: '#ff0000', label: '100万円-1000万円'},
+                {value: 750000, color: '#ff6464', label: '75万円-100万円'},
+                {value: 500000, color: '#f08519', label: '50万円-75万円'},
+                {value: 250000, color: '#f7af67', label: '25万円-50万円'},
+                {value: 100000, color: '#f3f37c', label: '10万円-25万円'},
+                {value: 0, color: '#ffffff', label: '10万円未満'},
+             ];
+            
+             // コントロール（新しいHTML要素）を追加するときに呼び出される
+             legend.onAdd = function() {
+                const div = L.DomUtil.create('div', 'info legend');
+
+                //凡例のタイトル
+                div.innerHTML += '<h3>地価[円/m<sup>2</sup>]</h3>';
+
+                // 各範囲の色とラベルを追加
+                grades.forEach((grade) => {
+                    div.innerHTML += 
+                        `<i style="background: ${grade.color};"></i>`
+                            + grade.label + '<br>';
+                });
+
+                return div;
+             };
+
+             //レイヤー切り替えコントロール
+             const layerControl =
+              L.control.layers(baseLayers,[],{collapsed:false}).addTo(map)
+
+             fetch('./L01-24_27.geojson')
+                .then((res)=>res.json())
+                .then((json)=>{       
+                    const  circleLayer = L.geoJSON(json,{
+                        pointToLayer:(feature, latlng)=> { //円の描画にはpointToLayerを用いる
+                            const getColor = (value) => { // 地価によって色を変える関数
+                                const grade = grades.find((g) => value > g.value); // gradesから条件に一致する範囲を検索
+                                return grade ? grade.color : '#ffffff'; // 該当する色があれば色を返す。なければ白にする。
+                             };
+                             return L.circle(latlng, {
+                                radius: 300,
+                                color: 'black',
+                                fillColor: getColor(feature.properties['L01_008']),
+                                fillOpacity: 0.7,
+                                weight: 1,
+                            });
+                        },
+                    }).bindPopup(
+                        (layer)=>'地価:'+layer.feature.properties['L01_008'],
+                        ).addTo(map);
+                    
+                    // レイヤー一覧に追加
+                    layerControl.addOverlay(circleLayer,'地価');
+
+                    // デフォルトで凡例を表示
+                    legend.addTo(map);
+
+                    // レイヤーコントロールのイベントリスナーで凡例を切り替える
+                    map.on('overlayadd', (e) => {
+                        if (e.name === '地価') {
+                            legend.addTo(map); // 凡例を地図に追加
+                        }
+                    });
+
+                    map.on('overlayremove', (e) => {
+                        if (e.name === '地価') {
+                            map.removeControl(legend); // 凡例を地図から削除
+                        }
+                    })
+                });
+         </script>
+    </body>
+</html>
+              
